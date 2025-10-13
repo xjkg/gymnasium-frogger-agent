@@ -2,15 +2,21 @@ import ale_py
 import gymnasium as gym
 import optuna
 from stable_baselines3 import DQN
+from stable_baselines3 import PPO
 from stable_baselines3.common.evaluation import evaluate_policy
 from stable_baselines3.common.monitor import Monitor
 import matplotlib.pyplot as plt
 import pandas as pd
 import os
+import shutil
 gym.register_envs(ale_py)
 
 def plot_learning_curve(log_path, window_size=100):
     """Generates and saves a plot of the learning curve."""
+    if log_path == "logs/final_model_logs":
+        agent = "DQN"
+    else:
+        agent = "PPO"
     try:
         log_data = pd.read_csv(log_path + ".monitor.csv", skiprows=1)
         cumulative_timesteps = log_data['l'].cumsum()
@@ -18,13 +24,13 @@ def plot_learning_curve(log_path, window_size=100):
         plt.figure(figsize=(10, 6))
         plt.plot(cumulative_timesteps, log_data['r'], alpha=0.3, label='Per-Episode Reward')
         plt.plot(cumulative_timesteps, moving_avg, color='red', linewidth=2, label=f'Moving Average (window={window_size})')
-        plt.title("Learning Curve of the Final Agent")
+        plt.title(f"Learning Curve of the {agent} Agent")
         plt.xlabel("Timesteps")
         plt.ylabel("Episode Reward")
         plt.legend()
         plt.grid(True)
-        plt.savefig("learning_curve.png")
-        print("\nLearning curve plot saved to learning_curve.png")
+        plt.savefig(f"learning_curve_{agent}.png")
+        print(f"\nLearning curve plot saved to learning_curve_{agent}.png")
     except FileNotFoundError:
         print("\nCould not find monitor log file. Skipping learning curve plot.")
 
@@ -80,9 +86,24 @@ def objective(trial):
     trial_env.close()
     return mean_reward
 
+def train_ppo():
+    env = gym.make("ALE/Frogger-v5", obs_type="ram")
+    env = Monitor(env, "ppo_logs/PPO")
+    model = PPO("MlpPolicy", env, verbose=1, learning_rate=0.0003, gamma=0.99)
+    model.learn(total_timesteps=30000)
+    model.save("ppo_frogger_model")
+    env.close()
+    eval_env = gym.make("ALE/Frogger-v5", obs_type="ram")
+    mean_reward, std_reward = evaluate_policy(model, eval_env, n_eval_episodes=20)
+    eval_env.close()
+    print(f"PPO: Mean reward = {mean_reward:.2f} ± {std_reward:.2f}")
+    return mean_reward, std_reward
+
 if __name__ == "__main__":
     # Check and create logs
     LOG_DIR = "logs/"
+    if os.path.exists("logs/"):
+        shutil.rmtree("logs/")
     os.makedirs(LOG_DIR, exist_ok=True)
     
     # Runtime variables
@@ -138,6 +159,8 @@ if __name__ == "__main__":
         # Images & Plotting
         plot_optuna_study(study)
         plot_learning_curve(final_log_path)
-
     else:
         print("No successful trials were completed. Cannot train or evaluate a final model.")
+
+    train_ppo()
+    plot_learning_curve("ppo_logs/PPO")
