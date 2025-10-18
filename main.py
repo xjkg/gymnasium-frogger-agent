@@ -10,6 +10,8 @@ import pandas as pd
 import os
 import shutil
 gym.register_envs(ale_py)
+from render_agent import run_and_render_agent 
+
 
 def plot_learning_curve(log_path, window_size=100):
     """Generates and saves a plot of the learning curve."""
@@ -65,9 +67,10 @@ def objective(trial):
     trial_env = Monitor(trial_env)
     
     learning_rate = trial.suggest_float("learning_rate", 1e-5, 1e-2, log=True)
-    gamma = trial.suggest_float("gamma", 0.9, 0.9999)
-    layer_size = trial.suggest_categorical("layer_size", [64, 128, 256])
-
+    gamma = trial.suggest_float("gamma", 0.9, 0.999999)
+    layer_size = trial.suggest_categorical("layer_size", [32, 64, 128, 256])
+    buffer_size = trial.suggest_int("buffer_size", 500000,2000000)
+    batch_size= trial.suggest_categorical("batch_size", [32, 64])
     net_arch = [layer_size, layer_size]
     policy_kwargs = dict(net_arch=net_arch)
     
@@ -76,6 +79,8 @@ def objective(trial):
         trial_env, 
         learning_rate=learning_rate, 
         gamma=gamma,
+        buffer_size=buffer_size,
+        batch_size=batch_size,
         policy_kwargs=policy_kwargs,
         verbose=0
     )
@@ -100,6 +105,8 @@ def train_ppo():
     return mean_reward, std_reward
 
 if __name__ == "__main__":
+    RENDER = True
+    
     # Check and create logs
     LOG_DIR = "logs/"
     if os.path.exists("logs/"):
@@ -107,9 +114,9 @@ if __name__ == "__main__":
     os.makedirs(LOG_DIR, exist_ok=True)
     
     # Runtime variables
-    STORAGE_PATH = "sqlite:///my_study.db" 
-    STUDY_NAME = "frogger-optimization"
-    NUM_TRIALS_TO_RUN = 30
+    STORAGE_PATH = "sqlite:///frogger_study_2.db" 
+    STUDY_NAME = "frogger-optimization_2"
+    NUM_TRIALS_TO_RUN = 100
 
     study = optuna.create_study(
         direction="maximize",
@@ -126,41 +133,46 @@ if __name__ == "__main__":
 
     print("\n--- Best Trial Information ---")
     best_trial = study.best_trial
-    if best_trial:
-        print(f"  Value (Mean Reward): {best_trial.value:.2f}")
-        print("  Params: ")
-        for key, value in best_trial.params.items():
-            print(f"    {key}: {value}")
+    if not RENDER:
+        if best_trial:
+            print(f"  Value (Mean Reward): {best_trial.value:.2f}")
+            print("  Params: ")
+            for key, value in best_trial.params.items():
+                print(f"    {key}: {value}")
+                
+            print("\n--- Training the final, best model ---")
+            best_params = best_trial.params.copy()
+            final_layer_size = best_params.pop('layer_size')
+            final_policy_kwargs = dict(net_arch=[final_layer_size, final_layer_size])
             
-        print("\n--- Training the final, best model ---")
-        best_params = best_trial.params.copy()
-        final_layer_size = best_params.pop('layer_size')
-        final_policy_kwargs = dict(net_arch=[final_layer_size, final_layer_size])
-        
-        # Create and wrap the environment with Monitor for logging
-        final_env = gym.make("ALE/Frogger-v5", obs_type="ram")
-        final_log_path = os.path.join(LOG_DIR, "final_model_logs")
-        final_env = Monitor(final_env, final_log_path)
-        
-        final_model = DQN("MlpPolicy", final_env, policy_kwargs=final_policy_kwargs,
-                          **best_params, verbose=0)
-        
-        final_model.learn(total_timesteps=30000)
-        final_model.save("best_frogger_model")
-        print("\nFinal model saved to best_frogger_model.zip")
-        
-        # Built-in evaluation
-        print("\n--- Evaluating Final Model Performance ---")
-        eval_env = gym.make("ALE/Frogger-v5", obs_type="ram")
-        mean_reward, std_reward = evaluate_policy(final_model, eval_env, n_eval_episodes=100)
-        print(f"Final Model: Mean reward = {mean_reward:.2f} +/- {std_reward:.2f}")
-        eval_env.close()
-        
-        # Images & Plotting
-        plot_optuna_study(study)
-        plot_learning_curve(final_log_path)
-    else:
-        print("No successful trials were completed. Cannot train or evaluate a final model.")
+            # Create and wrap the environment with Monitor for logging
+            final_env = gym.make("ALE/Frogger-v5", obs_type="ram")
+            final_log_path = os.path.join(LOG_DIR, "final_model_logs")
+            final_env = Monitor(final_env, final_log_path)
+            
+            final_model = DQN("MlpPolicy", final_env, policy_kwargs=final_policy_kwargs,
+                            **best_params, verbose=0)
+            
+            final_model.learn(total_timesteps=500000)
+            final_model.save("best_frogger_model")
+            print("\nFinal model saved to best_frogger_model.zip")
+            
+            # Built-in evaluation
+            print("\n--- Evaluating Final Model Performance ---")
+            eval_env = gym.make("ALE/Frogger-v5", obs_type="ram")
+            mean_reward, std_reward = evaluate_policy(final_model, eval_env, n_eval_episodes=100)
+            print(f"Final Model: Mean reward = {mean_reward:.2f} +/- {std_reward:.2f}")
+            eval_env.close()
+            
+            # Images & Plotting
+            plot_optuna_study(study)
+            plot_learning_curve(final_log_path)
+        else:
+            print("No successful trials were completed. Cannot train or evaluate a final model.")
 
-    train_ppo()
-    plot_learning_curve("ppo_logs/PPO")
+        # PPO
+        train_ppo()
+        plot_learning_curve("ppo_logs/PPO")
+    elif RENDER == True:
+        best_agent = DQN.load("best_frogger_model")
+        run_and_render_agent(best_agent, num_episodes_to_render=5, delay=0.3)
