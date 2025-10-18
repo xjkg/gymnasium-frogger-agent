@@ -1,5 +1,6 @@
 import ale_py
 import gymnasium as gym
+import numpy as np
 import optuna
 from stable_baselines3 import DQN
 from stable_baselines3 import PPO
@@ -10,7 +11,8 @@ import pandas as pd
 import os
 import shutil
 gym.register_envs(ale_py)
-from render_agent import run_and_render_agent 
+from render_agent import run_and_render_agent, AddChannelDim
+from stable_baselines3.common.vec_env import DummyVecEnv, VecTransposeImage
 
 
 def plot_learning_curve(log_path, window_size=100):
@@ -91,14 +93,38 @@ def objective(trial):
     trial_env.close()
     return mean_reward
 
+
+
 def train_ppo():
-    env = gym.make("ALE/Frogger-v5", obs_type="ram")
-    env = Monitor(env, "ppo_logs/PPO")
-    model = PPO("MlpPolicy", env, verbose=1, learning_rate=0.0003, gamma=0.99)
-    model.learn(total_timesteps=30000)
-    model.save("ppo_frogger_model")
-    env.close()
-    eval_env = gym.make("ALE/Frogger-v5", obs_type="ram")
+    model = PPO.load("ppo_frogger_model")
+    if not model:
+        env = gym.make("ALE/Frogger-v5", obs_type="grayscale", frameskip=4)
+        env = AddChannelDim(env)
+        env = Monitor(env, "ppo_logs/PPO")
+        env = DummyVecEnv([lambda: env])
+        env = VecTransposeImage(env)
+
+        model = PPO(
+            "CnnPolicy",
+            env,
+            verbose=1,
+            learning_rate=2.5e-4,
+            n_steps=128,
+            batch_size=128,
+            n_epochs=4,
+            gamma=0.99,
+            gae_lambda=0.95,
+            clip_range=0.1,
+            ent_coef=0.01,
+        )
+        model.learn(total_timesteps=500000)
+        model.save("ppo_frogger_model")
+        env.close()
+        plot_learning_curve("ppo_logs/PPO")
+    eval_env = gym.make("ALE/Frogger-v5", obs_type="grayscale")
+    eval_env = AddChannelDim(eval_env)
+    eval_env = DummyVecEnv([lambda: eval_env])
+    eval_env = VecTransposeImage(eval_env)
     mean_reward, std_reward = evaluate_policy(model, eval_env, n_eval_episodes=20)
     eval_env.close()
     print(f"PPO: Mean reward = {mean_reward:.2f} ± {std_reward:.2f}")
@@ -106,7 +132,7 @@ def train_ppo():
 
 if __name__ == "__main__":
     RENDER = True
-    
+
     # Check and create logs
     LOG_DIR = "logs/"
     if os.path.exists("logs/"):
@@ -170,9 +196,8 @@ if __name__ == "__main__":
         else:
             print("No successful trials were completed. Cannot train or evaluate a final model.")
 
-        # PPO
-        train_ppo()
-        plot_learning_curve("ppo_logs/PPO")
     elif RENDER == True:
         best_agent = DQN.load("best_frogger_model")
-        run_and_render_agent(best_agent, num_episodes_to_render=5, delay=0.3)
+        best_PPOagent = PPO.load("ppo_frogger_model")
+        run_and_render_agent(best_agent, obs_type="ram", num_episodes_to_render=5, delay=0.3)
+        run_and_render_agent(best_PPOagent, obs_type="grayscale", num_episodes_to_render=5, delay=0.3)
