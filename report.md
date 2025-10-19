@@ -35,4 +35,4 @@
 
 - Agenten lärde sig stadigt.
 - Med flera timesteps kan jag tro att agenten kunde göra ett människolikt utförande.
-- Vid rendering verkar agenten aldrig nå mål, men den klarar sig ganska långt fram i miljön.
+- Vid rendering verkar agenten aldrig nå mål, men den klarar sig ibland ganska långt fram i miljön.
