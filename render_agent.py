@@ -25,7 +25,7 @@ def run_and_render_agent(agent, obs_type, num_episodes_to_render: int = 3, delay
     Runs the trained agent in a Gymnasium environment with rendering enabled.
     
     Args:
-        agent: A trained DQN model loaded via DQN.load("path/to/model").
+        agent: A trained and loaded agent.
         num_episodes_to_render (int): Number of episodes to render.
         delay (float): Sleep delay between steps (seconds).
     """
@@ -39,8 +39,6 @@ def run_and_render_agent(agent, obs_type, num_episodes_to_render: int = 3, delay
         render_env = DummyVecEnv([lambda: render_env])
         render_env = VecTransposeImage(render_env)
     
-    # Store current epsilon and set to 0 for evaluation (no exploration)
-
     for episode in range(num_episodes_to_render):
         if obs_type == "grayscale":
             state = render_env.reset()
@@ -51,7 +49,7 @@ def run_and_render_agent(agent, obs_type, num_episodes_to_render: int = 3, delay
         print(f"Episode {episode + 1}/{num_episodes_to_render}")
 
         while not terminated and not truncated:
-            action, state = agent.predict(state, deterministic=True)
+            action, _ = agent.predict(state, deterministic=True)
             if obs_type == "grayscale":
                 state, reward, terminated, truncated = render_env.step(action)
             else:
@@ -61,6 +59,5 @@ def run_and_render_agent(agent, obs_type, num_episodes_to_render: int = 3, delay
         print(f"Episode finished with total reward: {total_reward}")
         time.sleep(1) # Pause before the next episode starts
 
-    # Restore original epsilon
     render_env.close() # Close the rendering environment
     print("Demonstration finished")

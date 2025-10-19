@@ -197,7 +197,19 @@ if __name__ == "__main__":
             print("No successful trials were completed. Cannot train or evaluate a final model.")
 
     elif RENDER == True:
-        best_agent = DQN.load("best_frogger_model")
-        best_PPOagent = PPO.load("ppo_frogger_model")
-        run_and_render_agent(best_agent, obs_type="ram", num_episodes_to_render=5, delay=0.3)
-        run_and_render_agent(best_PPOagent, obs_type="grayscale", num_episodes_to_render=5, delay=0.3)
+        try:
+            best_agent = DQN.load("best_frogger_model")
+        except Exception as e:
+            print(f"Failed to load DQN model: {e}")
+            best_agent = None
+
+        try:
+            best_PPOagent = PPO.load("ppo_frogger_model")
+        except Exception as e:
+            print(f"Failed to load PPO model: {e}")
+            best_PPOagent = None
+            
+        if best_agent:
+            run_and_render_agent(best_agent, obs_type="ram", num_episodes_to_render=5, delay=0.3)
+        if best_PPOagent:
+            run_and_render_agent(best_PPOagent, obs_type="grayscale", num_episodes_to_render=5, delay=0.3)
