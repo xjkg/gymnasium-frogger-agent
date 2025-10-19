@@ -208,7 +208,8 @@ if __name__ == "__main__":
         except Exception as e:
             print(f"Failed to load PPO model: {e}")
             best_PPOagent = None
-            
+            #train_ppo()
+
         if best_agent:
             run_and_render_agent(best_agent, obs_type="ram", num_episodes_to_render=5, delay=0.3)
         if best_PPOagent:

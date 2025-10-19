@@ -36,3 +36,39 @@
 - Agenten lärde sig stadigt.
 - Med flera timesteps kan jag tro att agenten kunde göra ett människolikt utförande.
 - Vid rendering verkar agenten aldrig nå mål, men den klarar sig ibland ganska långt fram i miljön.
+
+# PPO
+- PPO (Proximal Policy Optimization) valdes eftersom det är en policy-gradient-baserad metod som ofta presterar bättre än DQN i miljöer med visuella observationer.
+- Till skillnad från DQN, som approximerar ett Q-värde per action, lär sig PPO direkt en policy π(a|s) som avgör sannolikheten att ta varje action i ett givet state.
+- Eftersom observationerna här består av gråskalebilder från Atari-miljön används CnnPolicy, som bygger på konvolutionella neurala nätverk (CNN) för att extrahera visuella features.
+
+## Miljö
+- Miljön är samma som för DQN, men observationerna är grayscale frames istället för RAM-data.
+- För att PPO ska kunna bearbeta dessa bilder används en AddChannelDim-wrapper och VecTransposeImage för att anpassa bilddimensionerna till formatet (C, H, W) som Stable-Baselines3 kräver.
+
+## Träning
+PPO-agenten tränades i 500 000 timesteps med följande huvudparametrar:
+- learning_rate = 2.5e-4
+- n_steps = 128
+- batch_size = 128
+- n_epochs = 4
+- gamma = 0.99
+- clip_range = 0.1
+- ent_coef = 0.01
+
+## PPO Resultat
+Träningen visade en tydlig förbättring i belöningar över tid:
+
+<img width="600" alt="learning_curve_DQN" src="learning_curve_PPO.png" />
+
+- Belöningen ökade under träningen, vilket tyder på att agenten lärde sig grundläggande beteenden som att undvika bilar och röra sig uppåt.
+- Eftersom miljön är visuellt komplex och innehåller många rörelseobjekt krävs betydligt fler timesteps för att nå mänsklig nivå.
+
+# Slutsats
+|Algoritm|Observationstyp|Policy|Styrka|Svaghet|
+|---|---|---|---|---|
+|DQN|RAM(icke-visuell)|Value-based(MlpPolicy)|Snabb och stabil inlärning av tillståndsmönster|Saknar spatial förståelse|
+|PPO|Grayscale-bild(visuell)|Policy-gradient(CnnPolicy)|Lär sig visuella representationer och mer naturligt beteende|Kräver mycket mer data och tid|
+
+Sammanfattningsvis:
+PPO är mer lämpad för visuella miljöer som Frogger, men kräver längre träning för att nå optimal prestanda. DQN är enklare och effektivare i RAM-baserade miljöer, men kan inte generalisera visuella intryck lika väl.

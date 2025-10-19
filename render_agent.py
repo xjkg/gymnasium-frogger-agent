@@ -34,26 +34,31 @@ def run_and_render_agent(agent, obs_type, num_episodes_to_render: int = 3, delay
     # Create a new environment instance with render_mode='human'
     # Make sure to pass the same parameters as the training environment if they are specific.
     render_env = gym.make("ALE/Frogger-v5", obs_type=obs_type, render_mode='human', frameskip=4 if obs_type =="grayscale" else 1)
+
     if obs_type == "grayscale":
         render_env = AddChannelDim(render_env)
-        render_env = DummyVecEnv([lambda: render_env])
-        render_env = VecTransposeImage(render_env)
     
     for episode in range(num_episodes_to_render):
         if obs_type == "grayscale":
-            state = render_env.reset()
+            obs, _ = render_env.reset()
         else:
-            state, info = render_env.reset()
+            obs, info = render_env.reset()
         terminated, truncated = False, False
         total_reward = 0
         print(f"Episode {episode + 1}/{num_episodes_to_render}")
 
-        while not terminated and not truncated:
-            action, _ = agent.predict(state, deterministic=True)
+        while not (terminated or truncated):
+            
             if obs_type == "grayscale":
-                state, reward, terminated, truncated = render_env.step(action)
+                obs = np.transpose(obs, (2, 0, 1))
+                obs = np.expand_dims(obs, axis=0)   
+                action, _ = agent.predict(obs, deterministic=True)
+                action = np.squeeze(action).item()
+                obs, reward, terminated, truncated, _ = render_env.step(action)
             else:
-                state, reward, terminated, truncated, info = render_env.step(action)
+                action, _ = agent.predict(obs, deterministic=True)
+                obs, reward, terminated, truncated, info = render_env.step(action)
+
             total_reward += reward
 
         print(f"Episode finished with total reward: {total_reward}")
